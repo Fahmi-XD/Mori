@@ -170,14 +170,23 @@ export async function scrapeTikTok(url) {
         const isWebRedirect =
           href.includes("/en/download") || href.includes("/id/download");
 
-        if (isCdnLink && !isWebRedirect) {
-          if (text.includes("app")) return;
+        const isImageLink =
+          href.match(/\.(jpg|jpeg|png|webp|avif)/i) ||
+          text.includes("photo") ||
+          text.includes("image") ||
+          text.includes("slide");
+
+        if ((isCdnLink || isImageLink) && !isWebRedirect) {
+          if (text.includes("app") && !isImageLink) return;
+          
           let label = "VIDEO";
           if (text.includes("music") || text.includes("mp3")) label = "MP3";
-          if (text.includes("photo")) label = "PHOTO";
+          if (isImageLink) label = "PHOTO";
+          
           const isMirror =
             (label === "VIDEO" && downloads.some((d) => d.type === "VIDEO")) ||
             (label === "MP3" && downloads.some((d) => d.type === "MP3"));
+            
           downloads.push({ type: label, url: href, isMirror });
         }
       }
@@ -188,11 +197,16 @@ export async function scrapeTikTok(url) {
     if (titleEl) titleEl.querySelectorAll("a").forEach((a) => a.remove());
     const title = titleEl?.textContent?.trim() || "TikTok Content";
     const thumbEl = resDoc.querySelector("img");
-    const thumb = thumbEl
+    let thumb = thumbEl
       ? thumbEl.getAttribute("src")?.startsWith("/")
         ? "https://snaptik.app" + thumbEl.getAttribute("src")
         : thumbEl.getAttribute("src")
       : null;
+
+    if (!thumb && downloads.length > 0) {
+      const firstMedia = downloads.find(d => d.type === "VIDEO" || d.type === "PHOTO") || downloads[0];
+      thumb = firstMedia.url;
+    }
 
     return {
       status: true,
@@ -242,7 +256,13 @@ export async function scrapeInstagram(url) {
         let href = a?.getAttribute("href");
         let imgSrc = img?.getAttribute("src");
 
-        if (imgSrc && !imgSrc.includes("logo")) {
+        const isInternalAsset = 
+          imgSrc && 
+          imgSrc.includes("indown.io") && 
+          !imgSrc.includes("url=") && 
+          !imgSrc.includes("token=");
+
+        if (imgSrc && !imgSrc.includes("logo") && !imgSrc.includes("placeholder") && !imgSrc.includes("images/") && !isInternalAsset) {
           imgSrc = imgSrc.startsWith("/")
             ? "https://indown.io" + imgSrc
             : imgSrc;
@@ -286,11 +306,21 @@ export async function scrapeInstagram(url) {
     const title =
       doc2.querySelector("h5")?.textContent?.trim() || "Instagram Content";
     if (!thumbnail) {
-      const img = doc2.querySelector('.row img:not([src*="logo"])');
-      if (img)
-        thumbnail = img.src.startsWith("/")
-          ? "https://indown.io" + img.src
-          : img.src;
+      const allImgs = doc2.querySelectorAll('.row img');
+      for (const img of allImgs) {
+        const src = img.getAttribute('src') || '';
+        const isInternal = src.includes("indown.io") && !src.includes("url=") && !src.includes("token=");
+        if (src && !src.includes("logo") && !src.includes("placeholder") && !src.includes("images/") && !isInternal) {
+          thumbnail = src.startsWith("/") ? "https://indown.io" + src : src;
+          break;
+        }
+      }
+    }
+
+    if (!thumbnail && downloads.length > 0) {
+      // Use the first media's real URL as thumbnail
+      const firstMedia = downloads.find(d => !d.isMirror) || downloads[0];
+      thumbnail = firstMedia.thumbnail || firstMedia.url;
     }
 
     return {
