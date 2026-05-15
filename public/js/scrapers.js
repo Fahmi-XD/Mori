@@ -366,7 +366,7 @@ export async function scrapeYouTube(url) {
       const progUrl = r2.data.progressURL;
 
       let attempts = 0;
-      while (progress < 3 && attempts < 5) {
+      while (progress < 3 && attempts < 15) {
         await new Promise((r) => setTimeout(r, 2000));
         const r3 = await CapacitorHttp.get({ url: progUrl, headers });
         if (!r3.data || r3.data.error) break;
@@ -828,7 +828,11 @@ export async function scrapeFacebook(url) {
 
       const extracted = extractFinalUrl(linkAttr);
       if (extracted && extracted.url.startsWith("http")) {
-        downloads.push({ type: quality || "VIDEO", url: extracted.url });
+        downloads.push({
+          type: quality || "VIDEO",
+          url: extracted.url,
+          isRender: extracted.isRender,
+        });
       }
     });
 
